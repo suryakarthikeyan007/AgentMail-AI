@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentMail AI - Agentic Email Management Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+  <!-- Top Navigation Header -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="brand-logo">
+        <span class="logo-dot"></span>
+        <span class="logo-icon">⚡</span>
+      </div>
+      <div>
+        <div class="brand-title">AgentMail <span class="highlight-text">AI</span></div>
+        <div class="brand-subtitle">An Agentic AI-Based Intelligent Email Management System</div>
+      </div>
+    </div>
+    <div class="nav-status">
+      <div class="badge badge-outline"><span class="indicator live"></span> Ollama: Llama 3.1</div>
+      <div class="badge badge-outline"><span class="indicator live"></span> Embedding: nomic-embed-text</div>
+      <div class="badge badge-accent" id="test-mode-badge">TEST_MODE: ACTIVE</div>
+      <button class="btn btn-secondary btn-sm" id="btn-refresh-data" title="Refresh Dashboard">🔄 Refresh</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Architecture Lifecycle Banner -->
+    <div class="architecture-flow-card">
+      <div class="flow-header">
+        <span class="flow-tag">AGENTIC REASONING LIFECYCLE</span>
+        <span class="flow-desc">CLASSIFY → RETRIEVE → REMEMBER → PLAN → DECIDE → ACT → VERIFY → REMEMBER</span>
+      </div>
+      <div class="pipeline-track" id="pipeline-live-track">
+        <div class="step-node" data-step="1">
+          <div class="step-circle">1</div>
+          <div class="step-label">Classify</div>
+        </div>
+        <div class="track-line"></div>
+        <div class="step-node" data-step="2">
+          <div class="step-circle">2</div>
+          <div class="step-label">RAG Retrieve</div>
+        </div>
+        <div class="track-line"></div>
+        <div class="step-node" data-step="3">
+          <div class="step-circle">3</div>
+          <div class="step-label">Memory</div>
+        </div>
+        <div class="track-line"></div>
+        <div class="step-node" data-step="4">
+          <div class="step-circle">4</div>
+          <div class="step-label">Plan Action</div>
+        </div>
+        <div class="track-line"></div>
+        <div class="step-node" data-step="5">
+          <div class="step-circle">5</div>
+          <div class="step-label">Draft / Tool</div>
+        </div>
+        <div class="track-line"></div>
+        <div class="step-node" data-step="6">
+          <div class="step-circle">6</div>
+          <div class="step-label">Quality Audit</div>
+        </div>
+        <div class="track-line"></div>
+        <div class="step-node" data-step="7">
+          <div class="step-circle">7</div>
+          <div class="step-label">Safety Dispatch</div>
+        </div>
+        <div class="track-line"></div>
+        <div class="step-node" data-step="8">
+          <div class="step-circle">8</div>
+          <div class="step-label">Remember</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics Metrics Row -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon icon-blue">📨</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-label">Total Emails Processed</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon icon-green">🤖</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-auto">0</div>
+          <div class="stat-label">Autonomous Replies</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon icon-amber">🛡️</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-approvals">0</div>
+          <div class="stat-label">Human Approvals</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon icon-purple">❓</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-clarifications">0</div>
+          <div class="stat-label">Clarifications</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon icon-cyan">⚙️</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-tools">0</div>
+          <div class="stat-label">Tool Requirements</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon icon-gray">🚫</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-ignored">0</div>
+          <div class="stat-label">Ignored (Spam)</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon icon-red">⚠️</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-highrisk">0</div>
+          <div class="stat-label">High Risk Flagged</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon icon-pink">⚡</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-speed">0 ms</div>
+          <div class="stat-label">Avg Processing Time</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Workspace: Interactive Demo Mode & Live Inspector -->
+    <div class="workspace-grid">
+      <!-- Left Column: Interactive Simulation / Email Ingestion -->
+      <section class="card demo-card">
+        <div class="card-header">
+          <h3>🎮 Live Demonstration Console</h3>
+          <span class="badge badge-accent">Demo Mode</span>
+        </div>
+        <p class="card-subtitle">
+          Test incoming emails dynamically without needing a live Google Cloud trigger during viva / presentations.
+        </p>
+
+        <!-- Presets bar for quick testing -->
+        <div class="presets-container">
+          <span class="preset-label">Quick Viva Presets:</span>
+          <div class="preset-buttons">
+            <button class="preset-btn" data-preset="interview">📅 1. Interview Slot</button>
+            <button class="preset-btn" data-preset="salary">💰 2. Salary Offer</button>
+            <button class="preset-btn" data-preset="resume">📄 3. Send Resume</button>
+            <button class="preset-btn" data-preset="spam">🚫 4. Promo Spam</button>
+            <button class="preset-btn" data-preset="followup">🔄 5. Thread Follow-up</button>
+          </div>
+        </div>
+
+        <form id="email-demo-form" class="demo-form">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="input-sender">Sender Email</label>
+              <input type="email" id="input-sender" required value="recruiter@techcorp.com" placeholder="recruiter@company.com">
+            </div>
+            <div class="form-group flex-1">
+              <label for="input-thread-id">Thread ID (for Memory)</label>
+              <input type="text" id="input-thread-id" value="thread_demo_01" placeholder="thread_xxx">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="input-subject">Subject</label>
+            <input type="text" id="input-subject" required value="Technical Interview Invitation" placeholder="Subject...">
+          </div>
+
+          <div class="form-group">
+            <label for="input-body">Email Body</label>
+            <textarea id="input-body" rows="4" required placeholder="Type or paste incoming email text here...">Hi Pradeep, we were impressed by your profile. Can we schedule an interview tomorrow at 3 PM to discuss the AI Engineer position?</textarea>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="btn-process">
+              <span class="btn-spinner" id="process-spinner" style="display:none;">⏳</span>
+              <span id="btn-process-text">🚀 Run Agentic AI Pipeline</span>
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-clear-form">Clear</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Right Column: Live Pipeline Trace & Agent Reasoning Inspector -->
+      <section class="card trace-card">
+        <div class="card-header">
+          <h3>🔬 Agent Reasoning & Audit Trace</h3>
+          <span class="badge" id="trace-status-badge">Idle</span>
+        </div>
+        <p class="card-subtitle">Transparent real-time breakdown of all agent decisions and safety audits.</p>
+
+        <div class="trace-tabs">
+          <button class="tab-btn active" data-tab="tab-overview">Overview</button>
+          <button class="tab-btn" data-tab="tab-planner">Planner Logic</button>
+          <button class="tab-btn" data-tab="tab-rag">RAG Context</button>
+          <button class="tab-btn" data-tab="tab-quality">Quality & Safety</button>
+          <button class="tab-btn" data-tab="tab-response">Draft Response</button>
+        </div>
+
+        <div class="tab-content" id="tab-overview">
+          <div class="empty-state" id="trace-empty">Run an email in the console to inspect the agentic execution steps.</div>
+          <div class="trace-content" id="trace-overview-content" style="display:none;">
+            <div class="summary-box" id="trace-summary-box"></div>
+            <div class="steps-timeline" id="trace-steps-list"></div>
+          </div>
+        </div>
+
+        <div class="tab-content" id="tab-planner" style="display:none;">
+          <pre class="code-block" id="tab-planner-code">// Planner reasoning will appear here</pre>
+        </div>
+
+        <div class="tab-content" id="tab-rag" style="display:none;">
+          <div class="rag-info" id="tab-rag-info"></div>
+          <pre class="code-block" id="tab-rag-code">// Retrieved RAG document chunks will appear here</pre>
+        </div>
+
+        <div class="tab-content" id="tab-quality" style="display:none;">
+          <pre class="code-block" id="tab-quality-code">// Quality auditor findings and risk checks will appear here</pre>
+        </div>
+
+        <div class="tab-content" id="tab-response" style="display:none;">
+          <div class="response-viewer" id="tab-response-viewer">
+            <div class="response-header" id="response-subject-display">Subject: -</div>
+            <div class="response-body" id="response-body-display">-</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Human Approval Queue Section -->
+    <section class="card approvals-section">
+      <div class="card-header">
+        <div class="header-with-count">
+          <h3>🛡️ Human-in-the-Loop Approval Queue</h3>
+          <span class="counter-badge" id="approvals-count">0 Pending</span>
+        </div>
+        <span class="badge badge-warning">Zero-Hallucination Gate</span>
+      </div>
+      <p class="card-subtitle">
+        Emails involving calendar commitments, salary negotiations, or sensitive terms are placed here for human review, editing, or rejection.
+      </p>
+
+      <div class="approval-list" id="approval-items-list">
+        <div class="empty-state">No pending approval requests. System is operating safely.</div>
+      </div>
+    </section>
+
+    <!-- Recent Decisions & Processed Emails Table -->
+    <section class="card history-section">
+      <div class="card-header">
+        <h3>📊 Processed Emails & Decisions Audit Log</h3>
+        <span class="badge badge-outline" id="records-count">0 Records</span>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Sender</th>
+              <th>Subject</th>
+              <th>Category</th>
+              <th>Priority</th>
+              <th>Planner Decision</th>
+              <th>Risk Level</th>
+              <th>Final Action</th>
+              <th>Latency</th>
+            </tr>
+          </thead>
+          <tbody id="decisions-table-body">
+            <tr>
+              <td colspan="9" class="text-center text-muted">No emails processed yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Edit & Approve Modal Dialog -->
+  <div class="modal-backdrop" id="edit-modal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>✏️ Review & Edit Draft Email</h3>
+        <button class="modal-close" id="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Original Sender & Subject</label>
+          <div class="static-field" id="modal-sender-subject"></div>
+        </div>
+        <div class="form-group">
+          <label>Flagged Reason / Risk Notice</label>
+          <div class="alert-box alert-warning" id="modal-flag-reason"></div>
+        </div>
+        <div class="form-group">
+          <label for="modal-edited-body">Edit Draft Response (Zero-Hallucination Safe Text):</label>
+          <textarea id="modal-edited-body" rows="7"></textarea>
+        </div>
+        <input type="hidden" id="modal-message-id" value="">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
+        <button class="btn btn-primary" id="modal-submit-btn">✓ Submit & Re-Verify</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div>AgentMail AI &copy; 2026 - Final Year B.Tech Project in Artificial Intelligence & Data Science</div>
+    <div class="footer-tech">Engineered with Ollama (Llama 3.1 & nomic-embed-text) &bull; n8n Automation &bull; SQLite &bull; FastAPI</div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+{
+  "name": "AgentMail AI",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "readStatus": "unread"
+        }
+      },
+      "id": "node-1-gmail-trigger",
+      "name": "Gmail Trigger (New Unread)",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        180,
+        300
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "agentmail-gmail-oauth",
+          "name": "AgentMail Gmail Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agentmail-webhook",
+        "options": {}
+      },
+      "id": "node-1b-webhook-trigger",
+      "name": "Webhook Trigger (Test/Demo)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        180,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// MODULE 2: Email Preprocessing & Normalization\nconst input = $input.first().json;\n\n// Support both Gmail trigger payload and Webhook payload\nconst rawBody = input.snippet || input.body || (input.text ? input.text : '');\nconst sender = input.from || input.sender || 'unknown@example.com';\nconst subject = input.subject || 'No Subject';\nconst messageId = input.id || input.message_id || `msg_${Date.now()}`;\nconst threadId = input.threadId || input.thread_id || messageId;\n\n// Basic HTML & whitespace stripping\nlet cleanBody = rawBody.replace(/<[^>]+>/g, ' ').replace(/\\r\\n/g, '\\n').trim();\n\nreturn {\n  message_id: messageId,\n  thread_id: threadId,\n  sender: sender,\n  subject: subject,\n  body: cleanBody,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "node-2-preprocess-email",
+      "name": "Extract & Clean Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/process-email",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "node-3-agentmail-orchestrator",
+      "name": "AgentMail AI Core Pipeline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.result.final_action }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "AUTO_REPLY",
+              "output": 0
+            },
+            {
+              "value2": "HUMAN_APPROVAL",
+              "output": 1
+            },
+            {
+              "value2": "CLARIFICATION_REQUIRED",
+              "output": 2
+            },
+            {
+              "value2": "TOOL_REQUIRED",
+              "output": 3
+            },
+            {
+              "value2": "IGNORE",
+              "output": 4
+            }
+          ]
+        }
+      },
+      "id": "node-4-decision-switch",
+      "name": "Agentic Decision Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        940,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.result.quality_audit.approved }}",
+              "value2": true
+            }
+          ],
+          "string": [
+            {
+              "value1": "={{ $json.result.quality_audit.risk_level }}",
+              "operation": "notEqual",
+              "value2": "HIGH"
+            }
+          ]
+        }
+      },
+      "id": "node-5-safety-gate",
+      "name": "Quality & Risk Safety Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// In TEST_MODE, email is safely simulated.\n// When TEST_MODE=false and live Gmail credentials are active, this triggers Gmail Send.\nreturn {\n  status: 'DISPATCH_CONFIRMED',\n  recipient: $json.result.sender,\n  subject: $json.result.draft_response.subject,\n  body: $json.result.draft_response.body,\n  thread_id: $json.result.thread_id,\n  test_mode_simulation: $json.result.dispatch_result ? $json.result.dispatch_result.mode : 'TEST_MODE'\n};"
+      },
+      "id": "node-6-gmail-send-safe",
+      "name": "Gmail Send (Safe Test Mode Gate)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Human approval required route\nreturn {\n  status: 'PENDING_HUMAN_APPROVAL',\n  message_id: $json.result.message_id,\n  thread_id: $json.result.thread_id,\n  reason: $json.result.action_reason,\n  draft: $json.result.draft_response\n};"
+      },
+      "id": "node-7-human-approval",
+      "name": "Route to Human Review Queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clarification email dispatched\nreturn {\n  status: 'CLARIFICATION_SENT',\n  recipient: $json.result.sender,\n  clarification_draft: $json.result.draft_response\n};"
+      },
+      "id": "node-8-clarification-handler",
+      "name": "Clarification Dispatch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// External tool invocation gate\nreturn {\n  status: 'TOOL_EXECUTION_PENDING',\n  requested_tool: $json.result.planner_decision.required_information,\n  reason: $json.result.action_reason\n};"
+      },
+      "id": "node-9-tool-handler",
+      "name": "Tool Requirement Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ignore low value spam\nreturn {\n  status: 'IGNORED_SPAM',\n  message_id: $json.result.message_id,\n  reason: 'Spam/promotional content filtered without response.'\n};"
+      },
+      "id": "node-10-ignore-handler",
+      "name": "Ignore & Silent Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        720
+      ]
+    }
+  ],
+  "connections": {
+    "Gmail Trigger (New Unread)": {
+      "main": [
+        [
+          {
+            "node": "Extract & Clean Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger (Test/Demo)": {
+      "main": [
+        [
+          {
+            "node": "Extract & Clean Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Clean Email": {
+      "main": [
+        [
+          {
+            "node": "AgentMail AI Core Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AgentMail AI Core Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Agentic Decision Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agentic Decision Switch": {
+      "main": [
+        [
+          {
+            "node": "Quality & Risk Safety Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route to Human Review Queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clarification Dispatch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tool Requirement Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore & Silent Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality & Risk Safety Gate": {
+      "main": [
+        [
+          {
+            "node": "Gmail Send (Safe Test Mode Gate)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route to Human Review Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
