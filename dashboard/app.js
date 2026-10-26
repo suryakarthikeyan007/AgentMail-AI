@@ -88,6 +88,11 @@ function setupEventListeners() {
     bodyInput.value = '';
   });
 
+  processBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await handleProcessEmail();
+  });
+
   emailForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     await handleProcessEmail();
@@ -483,6 +488,7 @@ function simulateClientSidePipeline(payload) {
     approvalList.innerHTML = approvalCard + (approvalList.innerHTML.includes('No pending') ? '' : approvalList.innerHTML);
     approvalsCount.textContent = '1 Pending';
   }
+}
 
 function animatePipelineTrack() {
   const nodes = document.querySelectorAll('.step-node');
