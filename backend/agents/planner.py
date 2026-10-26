@@ -56,6 +56,11 @@ class PlannerAgent(BaseAgent):
         tools_list = available_tools or ["calendar_check_tool (status: offline)"]
         tools_str = ", ".join(tools_list)
 
+        # Execute active calendar availability check
+        from backend.tools.calendar_tool import CalendarAvailabilityTool
+        cal_tool = CalendarAvailabilityTool()
+        calendar_audit = cal_tool.check_availability(email_data.get("body", "") + " " + email_data.get("subject", ""))
+
         prompt = f"""EVALUATE THE INCOMING EMAIL:
 From: {email_data.get('sender')}
 Subject: {email_data.get('subject')}
@@ -70,6 +75,12 @@ Intent: {classification.get('intent')}
 Priority: {classification.get('priority')}
 Sensitivity: {classification.get('sensitivity')}
 Requested Action: {classification.get('requested_action')}
+
+CALENDAR AVAILABILITY CHECK:
+Lookup Performed: {calendar_audit.get('lookup_performed')}
+Requested Slot: {calendar_audit.get('requested_slot')}
+Calendar Status: {calendar_audit.get('status')}
+Findings: {calendar_audit.get('reason')}
 
 RETRIEVED RAG CONTEXT:
 \"\"\"
@@ -97,33 +108,40 @@ Analyze the requirements, check for calendar/salary/legal safety risks, and prod
         body_lower = email_data.get("body", "").lower()
         subject_lower = email_data.get("subject", "").lower()
 
+        # Risk severity classification (distinct from approval requirement)
+        risk_severity = "LOW"
+
         # Rule 1: Spam -> IGNORE
         if category == "Spam/Low Value" or any(w in body_lower for w in ["win a free", "lottery", "unsolicited marketing"]):
             decision = "IGNORE"
+            risk_severity = "LOW"
             reason = "Spam or promotional message detected; ignoring to conserve resources and avoid engagement."
 
-        # Rule 2: Salary / Legal / Contract -> HUMAN_APPROVAL
+        # Rule 2: Salary / Legal / Contract -> HUMAN_APPROVAL with HIGH risk
         elif category == "Sensitive" or any(w in body_lower for w in ["salary", "lpa", "ctc", "per annum", "legal notice", "confidentiality agreement"]):
             decision = "HUMAN_APPROVAL"
-            reason = parsed.get("reason") or "Contains sensitive financial, salary, or legal topics requiring human executive sign-off."
+            risk_severity = "HIGH"
+            reason = parsed.get("reason") or "APPROVAL REQUIRED: Contains sensitive financial, salary, or legal topics. Risk Severity: HIGH."
 
-        # Rule 3: Scheduling / Interview / Meeting without verified calendar tool -> HUMAN_APPROVAL or CLARIFICATION_REQUIRED
-        elif any(w in body_lower or w in subject_lower for w in ["schedule an interview", "interview tomorrow", "schedule a meeting", "meet tomorrow", "time slot", "are you free at"]):
-            if decision not in ["HUMAN_APPROVAL", "CLARIFICATION_REQUIRED"]:
-                decision = "HUMAN_APPROVAL"
-                reason = "Meeting or interview scheduling requested; calendar availability is unverified. Human approval required to prevent false commitments."
-            else:
-                reason = parsed.get("reason", "Availability confirmation needed from user.")
+        # Rule 3: Scheduling / Interview / Meeting without verified calendar tool -> HUMAN_APPROVAL with MEDIUM risk
+        elif any(w in body_lower or w in subject_lower for w in ["schedule an interview", "interview tomorrow", "schedule a meeting", "meet tomorrow", "time slot", "are you free at"]) or calendar_audit.get("lookup_performed"):
+            decision = "HUMAN_APPROVAL"
+            risk_severity = "MEDIUM"
+            slot_name = calendar_audit.get("requested_slot") or "requested time"
+            reason = f"APPROVAL REQUIRED: Interview/Meeting scheduling requested for '{slot_name}'. Calendar lookup: {calendar_audit.get('status')}. Risk Severity: MEDIUM due to schedule commitment conflict exposure."
 
         # Fallback validation
         if decision not in valid_decisions:
             decision = "HUMAN_APPROVAL"
-            reason = "Planner generated unverified decision state; routing to human review for safety."
+            risk_severity = "MEDIUM"
+            reason = "APPROVAL REQUIRED: Planner generated unverified decision state; routing to human review for safety."
 
         return {
             "decision": decision,
-            "reason": parsed.get("reason") or reason,
+            "risk_severity": risk_severity,
+            "reason": reason,
             "confidence": float(parsed.get("confidence", 0.92)),
             "required_information": parsed.get("required_information", []),
-            "recommended_action": parsed.get("recommended_action", f"Proceed with {decision}")
+            "recommended_action": parsed.get("recommended_action", f"Proceed with {decision}"),
+            "calendar_audit": calendar_audit
         }

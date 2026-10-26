@@ -88,6 +88,7 @@ Return STRICT JSON ONLY."""
         body_lower = draft_body.lower()
         hard_issues = []
         is_high_risk = False
+        is_medium_risk = False
 
         # Check for ungrounded interview/meeting commitments
         risky_commit_words = ["i will be available tomorrow", "tomorrow at", "tomorrow works", "i can meet you at", "let us meet tomorrow", "i confirm tomorrow"]
@@ -101,12 +102,17 @@ Return STRICT JSON ONLY."""
             hard_issues.append("Contains sensitive salary or compensation terms.")
             is_high_risk = True
 
-        risk_level = parsed.get("risk_level", "LOW")
-        if is_high_risk or risk_level == "HIGH":
+        # Check if planner required human approval due to unverified scheduling exposure
+        if planner_decision == "HUMAN_APPROVAL" and not is_high_risk:
+            is_medium_risk = True
+            hard_issues.append("Pending supervisor review to prevent unverified calendar schedule conflicts.")
+
+        if is_high_risk:
             risk_level = "HIGH"
             approved = False
-        elif risk_level == "MEDIUM":
-            approved = True
+        elif is_medium_risk or parsed.get("risk_level") == "MEDIUM":
+            risk_level = "MEDIUM"
+            approved = False # Requires human supervisor sign-off before dispatch
         else:
             risk_level = "LOW"
             approved = bool(parsed.get("approved", True))
@@ -118,5 +124,5 @@ Return STRICT JSON ONLY."""
             "risk_level": risk_level,
             "issues": combined_issues,
             "corrections": parsed.get("corrections", []),
-            "reason": parsed.get("reason", "Draft evaluated against safety criteria and factual grounding.")
+            "reason": parsed.get("reason", f"Risk severity: {risk_level}. Approval required: {not approved}.")
         }

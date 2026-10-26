@@ -91,12 +91,22 @@ def approve_draft_endpoint(payload: ApprovalActionSchema):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM approval_queue WHERE message_id = ?", (payload.message_id,))
     item = cursor.fetchone()
-    conn.close()
 
     if not item:
+        conn.close()
         raise HTTPException(status_code=404, detail="Approval item not found")
 
     item_dict = dict(item)
+
+    # DUPLICATE SEND PREVENTION GATE
+    if item_dict.get("status") in ["APPROVED", "EDITED_AND_APPROVED"]:
+        conn.close()
+        raise HTTPException(status_code=400, detail="This email draft has already been approved and sent. Duplicate transmission prevented.")
+
+    if item_dict.get("status") == "REJECTED":
+        conn.close()
+        raise HTTPException(status_code=400, detail="Cannot approve a previously rejected email draft.")
+
     # Dispatch email
     dispatch = safety_gate.dispatch_email(
         recipient=item_dict["sender"],
@@ -106,6 +116,16 @@ def approve_draft_endpoint(payload: ApprovalActionSchema):
     )
 
     update_approval_status(payload.message_id, "APPROVED")
+
+    # Update processed_emails state
+    cursor.execute("""
+        UPDATE processed_emails
+        SET approved = 1, final_action = 'APPROVED_AND_SENT'
+        WHERE message_id = ?
+    """, (payload.message_id,))
+    conn.commit()
+    conn.close()
+
     insert_audit_log(
         message_id=payload.message_id,
         thread_id=item_dict["thread_id"],
@@ -128,13 +148,27 @@ def reject_draft_endpoint(payload: ApprovalActionSchema):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM approval_queue WHERE message_id = ?", (payload.message_id,))
     item = cursor.fetchone()
-    conn.close()
 
     if not item:
+        conn.close()
         raise HTTPException(status_code=404, detail="Approval item not found")
 
     item_dict = dict(item)
+    if item_dict.get("status") in ["APPROVED", "EDITED_AND_APPROVED"]:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Cannot reject an email draft that has already been dispatched.")
+
     update_approval_status(payload.message_id, "REJECTED")
+
+    # Update processed_emails state
+    cursor.execute("""
+        UPDATE processed_emails
+        SET final_action = 'REJECTED_STOP'
+        WHERE message_id = ?
+    """, (payload.message_id,))
+    conn.commit()
+    conn.close()
+
     insert_audit_log(
         message_id=payload.message_id,
         thread_id=item_dict["thread_id"],
@@ -157,12 +191,16 @@ def edit_response_endpoint(payload: EditResponseSchema):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM approval_queue WHERE message_id = ?", (payload.message_id,))
     item = cursor.fetchone()
-    conn.close()
 
     if not item:
+        conn.close()
         raise HTTPException(status_code=404, detail="Approval item not found")
 
     item_dict = dict(item)
+
+    if item_dict.get("status") in ["APPROVED", "EDITED_AND_APPROVED"]:
+        conn.close()
+        raise HTTPException(status_code=400, detail="This draft has already been dispatched. Further edits blocked.")
 
     # Re-audit edited body via Quality Risk Checker
     edited_draft = {
@@ -178,6 +216,7 @@ def edit_response_endpoint(payload: EditResponseSchema):
     )
 
     if re_audit.get("risk_level") == "HIGH":
+        conn.close()
         return {
             "status": "warning",
             "message": "Edited body contains HIGH risk factors. Dispatch blocked.",
@@ -193,6 +232,16 @@ def edit_response_endpoint(payload: EditResponseSchema):
     )
 
     update_approval_status(payload.message_id, "EDITED_AND_APPROVED", edited_body=payload.edited_body)
+
+    # Update processed_emails record
+    cursor.execute("""
+        UPDATE processed_emails
+        SET approved = 1, final_action = 'EDITED_AND_SENT', response_body = ?
+        WHERE message_id = ?
+    """, (payload.edited_body, payload.message_id))
+    conn.commit()
+    conn.close()
+
     insert_audit_log(
         message_id=payload.message_id,
         thread_id=item_dict["thread_id"],

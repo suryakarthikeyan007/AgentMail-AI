@@ -97,17 +97,30 @@ class EmailAgentPipeline:
             memory_context=memory_context
         )
         planner_decision = planner_result.get("decision", "HUMAN_APPROVAL")
+        cal_audit = planner_result.get("calendar_audit", {})
+
+        # Optional Step 5b: Calendar Lookup Trace
+        if cal_audit and cal_audit.get("lookup_performed"):
+            pipeline_trace.append({
+                "step": "CALENDAR_LOOKUP",
+                "status": "COMPLETED",
+                "requested_slot": cal_audit.get("requested_slot"),
+                "calendar_status": cal_audit.get("status"),
+                "details": cal_audit.get("reason")
+            })
+
         pipeline_trace.append({
             "step": "PLAN",
             "status": "COMPLETED",
             "decision": planner_decision,
+            "risk_severity": planner_result.get("risk_severity", "LOW"),
             "reason": planner_result.get("reason"),
             "confidence": planner_result.get("confidence")
         })
 
         # STEP 6: Handling by Planner Decision
         draft_response = {"subject": f"Re: {subject}", "body": "", "reasoning_summary": ""}
-        quality_audit = {"approved": True, "risk_level": "LOW", "issues": [], "reason": "No draft required"}
+        quality_audit = {"approved": True, "risk_level": planner_result.get("risk_severity", "LOW"), "issues": [], "reason": "No draft required"}
         dispatch_result = None
 
         if planner_decision == "IGNORE":
