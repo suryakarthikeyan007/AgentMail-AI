@@ -101,44 +101,65 @@ Analyze the requirements, check for calendar/salary/legal safety risks, and prod
         parsed = self.clean_json_response(raw_response)
 
         decision = parsed.get("decision", "")
+        reason = parsed.get("reason") or "Factual enquiry supported by retrieved context."
         valid_decisions = {"AUTO_REPLY", "HUMAN_APPROVAL", "CLARIFICATION_REQUIRED", "TOOL_REQUIRED", "IGNORE"}
 
         # Deterministic Safety Gate Overrides
         category = classification.get("category", "")
+        priority = classification.get("priority", "Medium")
         body_lower = email_data.get("body", "").lower()
         subject_lower = email_data.get("subject", "").lower()
 
-        # Risk severity classification (distinct from approval requirement)
-        risk_severity = "LOW"
+        # Distinct Dimensions: Priority, Risk Level, and Approval Required
+        risk_level = "LOW"
+        approval_required = False
+        approval_rule_applied = "RULE_AUTONOMOUS_SAFE_REPLY"
 
         # Rule 1: Spam -> IGNORE
         if category == "Spam/Low Value" or any(w in body_lower for w in ["win a free", "lottery", "unsolicited marketing"]):
             decision = "IGNORE"
-            risk_severity = "LOW"
+            risk_level = "LOW"
+            approval_required = False
+            approval_rule_applied = "RULE_SPAM_FILTER"
             reason = "Spam or promotional message detected; ignoring to conserve resources and avoid engagement."
 
         # Rule 2: Salary / Legal / Contract -> HUMAN_APPROVAL with HIGH risk
         elif category == "Sensitive" or any(w in body_lower for w in ["salary", "lpa", "ctc", "per annum", "legal notice", "confidentiality agreement"]):
             decision = "HUMAN_APPROVAL"
-            risk_severity = "HIGH"
+            risk_level = "HIGH"
+            approval_required = True
+            approval_rule_applied = "RULE_FINANCIAL_LEGAL_GATE"
             reason = parsed.get("reason") or "APPROVAL REQUIRED: Contains sensitive financial, salary, or legal topics. Risk Severity: HIGH."
 
         # Rule 3: Scheduling / Interview / Meeting without verified calendar tool -> HUMAN_APPROVAL with MEDIUM risk
         elif any(w in body_lower or w in subject_lower for w in ["schedule an interview", "interview tomorrow", "schedule a meeting", "meet tomorrow", "time slot", "are you free at"]) or calendar_audit.get("lookup_performed"):
             decision = "HUMAN_APPROVAL"
-            risk_severity = "MEDIUM"
+            risk_level = "MEDIUM"
+            approval_required = True
+            approval_rule_applied = "RULE_CALENDAR_UNVERIFIED_GATE"
             slot_name = calendar_audit.get("requested_slot") or "requested time"
-            reason = f"APPROVAL REQUIRED: Interview/Meeting scheduling requested for '{slot_name}'. Calendar lookup: {calendar_audit.get('status')}. Risk Severity: MEDIUM due to schedule commitment conflict exposure."
+            cal_status = calendar_audit.get("availability_result", calendar_audit.get("status", "UNVERIFIED"))
+            reason = (
+                f"APPROVAL REQUIRED: Interview/Meeting scheduling requested for '{slot_name}'. "
+                f"Calendar availability status: {cal_status}. "
+                f"Risk Severity: MEDIUM. Automatic commitments are blocked; supervisor authorization required."
+            )
 
         # Fallback validation
         if decision not in valid_decisions:
             decision = "HUMAN_APPROVAL"
-            risk_severity = "MEDIUM"
+            risk_level = "MEDIUM"
+            approval_required = True
+            approval_rule_applied = "RULE_UNVERIFIED_STATE_FALLBACK"
             reason = "APPROVAL REQUIRED: Planner generated unverified decision state; routing to human review for safety."
 
         return {
             "decision": decision,
-            "risk_severity": risk_severity,
+            "priority": priority,
+            "risk_level": risk_level,
+            "risk_severity": risk_level,  # Backward compatibility alias
+            "approval_required": approval_required,
+            "approval_rule_applied": approval_rule_applied,
             "reason": reason,
             "confidence": float(parsed.get("confidence", 0.92)),
             "required_information": parsed.get("required_information", []),

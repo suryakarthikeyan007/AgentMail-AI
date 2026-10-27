@@ -2,7 +2,10 @@
 AgentMail AI - Calendar Availability Verification Tool
 Extracts date/time queries from email bodies and executes availability checks
 against integrated or local calendar schedules.
-Prevents ungrounded availability commitments.
+Prevents ungrounded availability commitments by classifying results as:
+- AVAILABLE: Calendar check confirmed slot is open.
+- CONFLICT: Calendar check found an overlapping schedule conflict.
+- UNVERIFIED: External calendar service is unreachable/offline; availability cannot be verified.
 """
 
 import re
@@ -19,9 +22,9 @@ class CalendarAvailabilityTool:
 
         # Date & Time extraction regex patterns
         self.time_patterns = [
-            r"\b(?:tomorrow|today|yesterday|tonight)\b(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|ist|est|gmt)?)?",
-            r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b(?:\s+(?:morning|afternoon|evening|night|\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?",
-            r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm|ist|est)\b",
+            r"\b(?:tomorrow|today|yesterday|tonight)\b(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:ist|est|gmt|utc|cst|pst)?)?",
+            r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b(?:\s+(?:morning|afternoon|evening|night|\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:ist|est|gmt|utc)?))?",
+            r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:ist|est|gmt|utc)\b",
             r"\b\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b"
         ]
 
@@ -39,7 +42,11 @@ class CalendarAvailabilityTool:
     def check_availability(self, email_text: str) -> Dict[str, Any]:
         """
         Executes a verified calendar availability lookup.
-        If calendar is unintegrated or slot is busy/unconfirmed, returns explicit audit findings.
+        Returns:
+            availability_result: 'AVAILABLE' | 'CONFLICT' | 'UNVERIFIED'
+            status: detailed status code
+            verified: True only if live calendar returned a confirmed open slot
+            recommended_wording: ground truth phrase to use in replies
         """
         requested_slot = self.extract_requested_slot(email_text)
 
@@ -47,9 +54,11 @@ class CalendarAvailabilityTool:
             return {
                 "lookup_performed": False,
                 "requested_slot": None,
+                "availability_result": "UNVERIFIED",
                 "status": "NO_SPECIFIC_SLOT_DETECTED",
                 "verified": False,
                 "reason": "No explicit calendar date or time mentioned in message.",
+                "recommended_wording": "Could you please share your preferred dates and time slots?",
                 "recommendation": "Request sender to specify candidate dates/times."
             }
 
@@ -58,9 +67,11 @@ class CalendarAvailabilityTool:
             return {
                 "lookup_performed": True,
                 "requested_slot": requested_slot,
-                "status": "LIVE_CALENDAR_CHECKED",
+                "availability_result": "UNVERIFIED",
+                "status": "LIVE_CALENDAR_CHECKED_TENTATIVE",
                 "verified": False,
-                "reason": f"Checked live Google Calendar for '{requested_slot}'. Slot is tentative or requires confirmation.",
+                "reason": f"Checked live Google Calendar for '{requested_slot}'. Slot is tentative and requires user confirmation.",
+                "recommended_wording": f"I'll need to confirm my availability before committing to {requested_slot}. Could you please share 2-3 alternative time slots?",
                 "recommendation": f"Ask user to confirm slot '{requested_slot}' or ask recruiter for 2-3 alternatives."
             }
         else:
@@ -68,8 +79,10 @@ class CalendarAvailabilityTool:
             return {
                 "lookup_performed": True,
                 "requested_slot": requested_slot,
+                "availability_result": "UNVERIFIED",
                 "status": "UNVERIFIED_CALENDAR_OFFLINE",
                 "verified": False,
                 "reason": f"Calendar lookup performed for '{requested_slot}': External calendar tool is offline or unverified. Actual free/busy status cannot be guaranteed.",
-                "recommendation": f"Do NOT commit to '{requested_slot}'. Ask recruiter for 2-3 alternative time slots or confirm availability with supervisor."
+                "recommended_wording": f"I'll need to confirm my availability before committing to {requested_slot}. Could you please share 2-3 alternative time slots so I can ensure no conflicts?",
+                "recommendation": f"Do NOT commit to '{requested_slot}'. Use wording: 'I'll need to confirm my availability before committing to that time' and request 2-3 alternative time slots."
             }

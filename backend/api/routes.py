@@ -117,12 +117,12 @@ def approve_draft_endpoint(payload: ApprovalActionSchema):
 
     update_approval_status(payload.message_id, "APPROVED")
 
-    # Update processed_emails state
+    # Update processed_emails state with delivery status
     cursor.execute("""
         UPDATE processed_emails
-        SET approved = 1, final_action = 'APPROVED_AND_SENT'
+        SET approved = 1, final_action = 'APPROVED_AND_SENT', delivery_status = ?
         WHERE message_id = ?
-    """, (payload.message_id,))
+    """, (dispatch.get("delivery_status", "SENT"), payload.message_id))
     conn.commit()
     conn.close()
 
@@ -135,11 +135,11 @@ def approve_draft_endpoint(payload: ApprovalActionSchema):
         risk_level=item_dict["risk_level"],
         action="APPROVED_AND_SENT",
         approval_status="APPROVED",
-        send_status="SENT",
-        reason=f"Approved by supervisor. {payload.comment}".strip()
+        send_status=dispatch.get("delivery_status", "SENT"),
+        reason=f"Approved by supervisor. Delivery: {dispatch.get('delivery_status')}. Exact draft SHA: {dispatch.get('body_sha256')}. {payload.comment}".strip()
     )
 
-    return {"status": "approved", "dispatch": dispatch}
+    return {"status": "approved", "delivery_status": dispatch.get("delivery_status"), "dispatch": dispatch}
 
 
 @router.post("/reject", summary="Reject a pending draft and stop execution")
@@ -236,9 +236,9 @@ def edit_response_endpoint(payload: EditResponseSchema):
     # Update processed_emails record
     cursor.execute("""
         UPDATE processed_emails
-        SET approved = 1, final_action = 'EDITED_AND_SENT', response_body = ?
+        SET approved = 1, final_action = 'EDITED_AND_SENT', response_body = ?, delivery_status = ?
         WHERE message_id = ?
-    """, (payload.edited_body, payload.message_id))
+    """, (payload.edited_body, dispatch.get("delivery_status", "SENT"), payload.message_id))
     conn.commit()
     conn.close()
 
@@ -251,11 +251,11 @@ def edit_response_endpoint(payload: EditResponseSchema):
         risk_level=re_audit.get("risk_level", "LOW"),
         action="EDITED_AND_SENT",
         approval_status="APPROVED",
-        send_status="SENT",
-        reason=f"Edited by supervisor and re-verified. {payload.comment}".strip()
+        send_status=dispatch.get("delivery_status", "SENT"),
+        reason=f"Edited by supervisor and re-verified. Delivery: {dispatch.get('delivery_status')}. Hash: {dispatch.get('body_sha256')}. {payload.comment}".strip()
     )
 
-    return {"status": "edited_and_sent", "dispatch": dispatch, "re_audit": re_audit}
+    return {"status": "edited_and_sent", "delivery_status": dispatch.get("delivery_status"), "dispatch": dispatch, "re_audit": re_audit}
 
 
 @router.post("/rag/reindex", summary="Re-index local knowledge base markdown documents")
@@ -265,3 +265,56 @@ def reindex_rag_endpoint():
         return {"status": "success", "indexed_chunks": count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/health", summary="Check verified real-time backend health, Ollama status, and database connectivity")
+def get_health_endpoint():
+    """Returns live verified health status of backend, database, and local Ollama model services."""
+    # 1. Database check
+    db_healthy = False
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        db_healthy = True
+        conn.close()
+    except Exception:
+        db_healthy = False
+
+    # 2. Ollama connection check
+    ollama_healthy = False
+    models_available = []
+    try:
+        import httpx
+        with httpx.Client(timeout=3.0) as client:
+            res = client.get("http://localhost:11434/api/tags")
+            if res.status_code == 200:
+                ollama_healthy = True
+                models_available = [m.get("name") for m in res.json().get("models", [])]
+    except Exception:
+        ollama_healthy = False
+
+    from backend.config import TEST_MODE, LLM_MODEL, EMBEDDING_MODEL
+    return {
+        "status": "healthy" if db_healthy else "degraded",
+        "backend": {
+            "online": True,
+            "version": "2.0.0",
+            "environment": "local"
+        },
+        "database": {
+            "connected": db_healthy,
+            "type": "SQLite (agentmail.db)"
+        },
+        "ollama": {
+            "connected": ollama_healthy,
+            "active_model": LLM_MODEL,
+            "installed_models": models_available
+        },
+        "embedding": {
+            "status": "active" if ollama_healthy and any("embed" in m for m in models_available) else ("offline" if not ollama_healthy else "ready"),
+            "model": EMBEDDING_MODEL
+        },
+        "execution_mode": "TEST_MODE_SIMULATION" if TEST_MODE else "LIVE_GMAIL_API",
+        "test_mode": TEST_MODE
+    }

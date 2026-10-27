@@ -105,22 +105,36 @@ class EmailAgentPipeline:
                 "step": "CALENDAR_LOOKUP",
                 "status": "COMPLETED",
                 "requested_slot": cal_audit.get("requested_slot"),
+                "availability_result": cal_audit.get("availability_result", "UNVERIFIED"),
                 "calendar_status": cal_audit.get("status"),
-                "details": cal_audit.get("reason")
+                "verified": cal_audit.get("verified", False),
+                "details": cal_audit.get("reason"),
+                "recommended_wording": cal_audit.get("recommended_wording")
             })
 
         pipeline_trace.append({
             "step": "PLAN",
             "status": "COMPLETED",
             "decision": planner_decision,
-            "risk_severity": planner_result.get("risk_severity", "LOW"),
+            "priority": planner_result.get("priority", "Medium"),
+            "risk_level": planner_result.get("risk_level", "LOW"),
+            "risk_severity": planner_result.get("risk_level", "LOW"),
+            "approval_required": planner_result.get("approval_required", False),
+            "approval_rule_applied": planner_result.get("approval_rule_applied", "RULE_AUTONOMOUS_SAFE_REPLY"),
             "reason": planner_result.get("reason"),
             "confidence": planner_result.get("confidence")
         })
 
         # STEP 6: Handling by Planner Decision
         draft_response = {"subject": f"Re: {subject}", "body": "", "reasoning_summary": ""}
-        quality_audit = {"approved": True, "risk_level": planner_result.get("risk_severity", "LOW"), "issues": [], "reason": "No draft required"}
+        quality_audit = {
+            "approved": True,
+            "risk_level": planner_result.get("risk_level", "LOW"),
+            "approval_required": planner_result.get("approval_required", False),
+            "approval_rule_applied": planner_result.get("approval_rule_applied", "RULE_AUTONOMOUS_SAFE_REPLY"),
+            "issues": [],
+            "reason": "No draft required"
+        }
         dispatch_result = None
 
         if planner_decision == "IGNORE":
@@ -147,7 +161,9 @@ class EmailAgentPipeline:
                 "step": "WRITE_DRAFT",
                 "status": "COMPLETED",
                 "draft_subject": draft_response.get("subject"),
-                "snippet": draft_response.get("body", "")[:120] + "..."
+                "word_count": len(draft_response.get("body", "").split()),
+                "snippet": draft_response.get("body", "")[:120] + "...",
+                "details": f"Generated grounded draft response ({len(draft_response.get('body', '').split())} words)."
             })
 
             # STEP 8: Quality & Risk Checker Audit
@@ -162,8 +178,11 @@ class EmailAgentPipeline:
                 "step": "QUALITY_AUDIT",
                 "status": "COMPLETED",
                 "risk_level": quality_audit.get("risk_level"),
+                "approval_required": quality_audit.get("approval_required"),
+                "approval_rule_applied": quality_audit.get("approval_rule_applied"),
                 "audit_approved": quality_audit.get("approved"),
-                "issues": quality_audit.get("issues")
+                "issues": quality_audit.get("issues"),
+                "details": quality_audit.get("reason")
             })
 
             # STEP 9: Safety Gate Routing Evaluation
@@ -180,10 +199,12 @@ class EmailAgentPipeline:
                 pipeline_trace.append({
                     "step": "DISPATCH",
                     "status": "COMPLETED",
-                    "dispatch_mode": dispatch_result.get("mode"),
+                    "dispatch_mode": dispatch_result.get("delivery_provider", "TEST_MODE_SIMULATION"),
+                    "delivery_status": dispatch_result.get("delivery_status", "SIMULATED_SUCCESS"),
+                    "body_sha256": dispatch_result.get("body_sha256"),
                     "details": dispatch_result.get("message")
                 })
-                response_summary = f"Sent reply: {draft_response.get('subject')} ({dispatch_result.get('mode')})"
+                response_summary = f"Sent reply: {draft_response.get('subject')} ({dispatch_result.get('delivery_status')})"
             else:
                 # Routed to HUMAN_APPROVAL
                 add_to_approval_queue({
@@ -197,12 +218,18 @@ class EmailAgentPipeline:
                     "draft_body": draft_response.get("body"),
                     "planner_decision": planner_decision,
                     "risk_level": quality_audit.get("risk_level"),
+                    "priority": planner_result.get("priority", "Medium"),
+                    "approval_rule_applied": quality_audit.get("approval_rule_applied") or planner_result.get("approval_rule_applied", "RULE_MANDATORY_APPROVAL"),
                     "reason": action_reason
                 })
                 pipeline_trace.append({
                     "step": "QUEUE_HUMAN_APPROVAL",
                     "status": "PENDING",
-                    "reason": action_reason
+                    "priority": planner_result.get("priority", "Medium"),
+                    "risk_level": quality_audit.get("risk_level"),
+                    "approval_rule": quality_audit.get("approval_rule_applied") or planner_result.get("approval_rule_applied"),
+                    "reason": action_reason,
+                    "details": f"Zero-Hallucination Gate enforced: {action_reason}"
                 })
                 response_summary = f"Held in Human Approval Queue. Reason: {action_reason}"
 

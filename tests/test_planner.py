@@ -80,6 +80,9 @@ def test_planner_interview_scheduling_without_calendar():
     # MUST NOT be AUTO_REPLY! Must be HUMAN_APPROVAL or CLARIFICATION_REQUIRED
     assert result["decision"] in ["HUMAN_APPROVAL", "CLARIFICATION_REQUIRED"]
     assert result["decision"] != "AUTO_REPLY"
+    assert result["approval_required"] is True
+    assert result["risk_level"] == "MEDIUM"
+    assert result["approval_rule_applied"] == "RULE_CALENDAR_UNVERIFIED_GATE"
 
 
 def test_planner_output_schema():
@@ -102,6 +105,10 @@ def test_planner_output_schema():
         memory_context=""
     )
     assert "decision" in result
+    assert "priority" in result
+    assert "risk_level" in result
+    assert "approval_required" in result
+    assert "approval_rule_applied" in result
     assert "reason" in result
     assert "confidence" in result
     assert "required_information" in result

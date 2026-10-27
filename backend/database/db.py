@@ -96,6 +96,8 @@ def init_db():
             draft_body TEXT,
             planner_decision TEXT,
             risk_level TEXT,
+            priority TEXT DEFAULT 'Medium',
+            approval_rule_applied TEXT DEFAULT 'RULE_MANDATORY_APPROVAL',
             reason TEXT,
             status TEXT DEFAULT 'PENDING',
             edited_body TEXT,
@@ -103,6 +105,17 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Safe schema migrations for existing databases
+    for migration in [
+        "ALTER TABLE approval_queue ADD COLUMN priority TEXT DEFAULT 'Medium'",
+        "ALTER TABLE approval_queue ADD COLUMN approval_rule_applied TEXT DEFAULT 'RULE_MANDATORY_APPROVAL'",
+        "ALTER TABLE processed_emails ADD COLUMN delivery_status TEXT DEFAULT 'NOT_SENT'"
+    ]:
+        try:
+            cursor.execute(migration)
+        except Exception:
+            pass
 
     conn.commit()
     conn.close()
@@ -181,8 +194,8 @@ def add_to_approval_queue(item: Dict[str, Any]) -> int:
         INSERT OR REPLACE INTO approval_queue (
             message_id, thread_id, sender, subject, original_body,
             retrieved_context, draft_subject, draft_body, planner_decision,
-            risk_level, reason, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+            risk_level, priority, approval_rule_applied, reason, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
     """, (
         item.get("message_id"),
         item.get("thread_id"),
@@ -193,7 +206,9 @@ def add_to_approval_queue(item: Dict[str, Any]) -> int:
         item.get("draft_subject"),
         item.get("draft_body"),
         item.get("planner_decision"),
-        item.get("risk_level"),
+        item.get("risk_level", "MEDIUM"),
+        item.get("priority", "Medium"),
+        item.get("approval_rule_applied", "RULE_MANDATORY_APPROVAL"),
         item.get("reason")
     ))
     queue_id = cursor.lastrowid

@@ -97,6 +97,11 @@ Return STRICT JSON ONLY."""
                 hard_issues.append(f"Contains unverified calendar commitment: '{rw}'")
                 is_high_risk = True
 
+        # Check for misleading calendar check claims when external calendar was unverified
+        if any(w in body_lower for w in ["i have checked my schedule", "i checked my schedule"]):
+            hard_issues.append("Draft claims schedule was checked, but external calendar is offline/unverified.")
+            is_medium_risk = True
+
         # Check for salary mentions
         if any(w in body_lower for w in ["lpa", "ctc", "salary of", "per annum", "compensation package"]):
             hard_issues.append("Contains sensitive salary or compensation terms.")
@@ -110,19 +115,25 @@ Return STRICT JSON ONLY."""
         if is_high_risk:
             risk_level = "HIGH"
             approved = False
+            rule_applied = "RULE_DETERMINISTIC_HIGH_RISK_BLOCK"
         elif is_medium_risk or parsed.get("risk_level") == "MEDIUM":
             risk_level = "MEDIUM"
-            approved = False # Requires human supervisor sign-off before dispatch
+            approved = False  # Requires human supervisor sign-off before dispatch
+            rule_applied = "RULE_UNVERIFIED_CALENDAR_OR_SENSITIVE_GATE"
         else:
             risk_level = "LOW"
             approved = bool(parsed.get("approved", True))
+            rule_applied = "RULE_QUALITY_STANDARDS_VERIFIED"
 
+        approval_required = (not approved) or (risk_level in ["MEDIUM", "HIGH"]) or (planner_decision == "HUMAN_APPROVAL")
         combined_issues = list(set(parsed.get("issues", []) + hard_issues))
 
         return {
             "approved": approved,
             "risk_level": risk_level,
+            "approval_required": approval_required,
+            "approval_rule_applied": rule_applied,
             "issues": combined_issues,
             "corrections": parsed.get("corrections", []),
-            "reason": parsed.get("reason", f"Risk severity: {risk_level}. Approval required: {not approved}.")
+            "reason": parsed.get("reason", f"Risk level: {risk_level}. Approval required: {approval_required}. Rule: {rule_applied}.")
         }

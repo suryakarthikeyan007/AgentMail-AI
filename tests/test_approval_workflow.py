@@ -97,7 +97,7 @@ def test_approve_pending_email_success():
     assert audit_entry is not None
     assert audit_entry["action"] == "APPROVED_AND_SENT"
     assert audit_entry["approval_status"] == "APPROVED"
-    assert audit_entry["send_status"] == "SENT"
+    assert audit_entry["send_status"] in ["SENT", "SIMULATED_SUCCESS"]
 
 
 def test_duplicate_send_prevention():
@@ -198,3 +198,18 @@ def test_edit_response_workflow_and_duplicate_prevention():
     })
     assert res2.status_code == 400
     assert "already been dispatched. Further edits blocked." in res2.json()["detail"]
+
+
+def test_health_check_endpoint():
+    """ISSUE 6 TEST: Verifies that /api/health returns verified database and model service statuses."""
+    res = client.get("/api/health")
+    assert res.status_code == 200
+    data = res.json()
+    assert "status" in data
+    assert "backend" in data
+    assert data["backend"]["online"] is True
+    assert "database" in data
+    assert data["database"]["connected"] is True
+    assert "ollama" in data
+    assert "embedding" in data
+    assert "test_mode" in data

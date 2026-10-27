@@ -16,7 +16,11 @@ Your role is to craft polite, concise, professional, and factually grounded emai
 Strict Guidelines:
 1. GROUNDED FACTS: ONLY make claims or share facts that exist in the RETRIEVED RAG CONTEXT or CONVERSATION MEMORY. When discussing education, skills, or projects, explicitly cite authentic details (e.g., CGPA 8.85, Department of AI & DS, Anna University, CogniFlow Systems internship, or AgentMail AI project).
 2. CONVERSATION CONTINUITY: If the CONVERSATION THREAD CONTEXT contains prior turns, explicitly acknowledge the prior exchange (e.g., 'Following up on our earlier discussion regarding...'). Maintain conversation continuity across turns.
-3. CALENDAR VERIFICATION: When the sender asks for meeting/interview slots and calendar availability is unconfirmed, explicitly state that you checked your calendar schedule and that the requested slot is currently unverified, then politely ask for 2-3 alternative time slots. NEVER invent availability.
+3. CALENDAR VERIFICATION ACCURACY:
+   - When calendar status is UNVERIFIED (or tool is offline): NEVER claim or state 'I have checked my schedule'. Instead, explicitly state: 'I will need to confirm my availability before committing to that time.' Politely request 2-3 alternative dates or time slots.
+   - When calendar status is CONFLICT: State that you have a prior commitment at that time and ask for alternative slots.
+   - When calendar status is AVAILABLE: State that the slot appears tentative and ask to confirm.
+   - NEVER make an ungrounded or premature calendar commitment.
 4. SALARY POLICY: NEVER negotiate, promise, or accept salary figures autonomously.
 5. If drafting a CLARIFICATION email, politely ask the sender for the specific missing details needed.
 6. If drafting a response requiring HUMAN_APPROVAL, draft a proposed professional draft for the human to review.
@@ -50,6 +54,16 @@ class EmailWriterAgent(BaseAgent):
         reason = planner_decision.get("reason", "")
         sender = email_data.get("sender", "")
         subject = email_data.get("subject", "")
+        calendar_audit = planner_decision.get("calendar_audit", {})
+
+        cal_info_str = "None"
+        if calendar_audit and calendar_audit.get("lookup_performed"):
+            cal_info_str = (
+                f"Status: {calendar_audit.get('availability_result', 'UNVERIFIED')} ({calendar_audit.get('status')})\n"
+                f"Requested Slot: {calendar_audit.get('requested_slot')}\n"
+                f"Required Phrasing Directive: {calendar_audit.get('recommended_wording')}\n"
+                "Rule: DO NOT state 'I have checked my schedule'. State: 'I will need to confirm my availability before committing to that time.'"
+            )
 
         prompt = f"""DRAFT EMAIL RESPONSE:
 Original Email:
@@ -64,6 +78,11 @@ Planner Directive:
 Decision: {decision}
 Reason: {reason}
 Recommended Action: {planner_decision.get('recommended_action')}
+
+Calendar Availability Grounding:
+\"\"\"
+{cal_info_str}
+\"\"\"
 
 Grounding Knowledge (RAG):
 \"\"\"
@@ -86,12 +105,21 @@ Return STRICT JSON ONLY."""
 
         if not parsed or "body" not in parsed:
             # Fallback safe draft
-            body = (
-                f"Dear {sender.split('<')[0].strip()},\n\n"
-                f"Thank you for contacting me regarding '{subject}'. I have received your message and am reviewing the details.\n\n"
-                f"I will follow up with you shortly.\n\n"
-                "Best regards,\nPradeep Kumar A.\nB.Tech Artificial Intelligence & Data Science"
-            )
+            if classification.get("category") == "Interview" or calendar_audit.get("lookup_performed"):
+                body = (
+                    f"Dear {sender.split('<')[0].strip()},\n\n"
+                    f"Thank you for considering me for this opportunity regarding '{subject}'.\n\n"
+                    f"I will need to confirm my availability before committing to that time. "
+                    f"Could you please share 2-3 alternative time slots so I can ensure no schedule conflicts?\n\n"
+                    "Best regards,\nPradeep Kumar A.\nB.Tech Artificial Intelligence & Data Science"
+                )
+            else:
+                body = (
+                    f"Dear {sender.split('<')[0].strip()},\n\n"
+                    f"Thank you for contacting me regarding '{subject}'. I have received your message and am reviewing the details.\n\n"
+                    f"I will follow up with you shortly.\n\n"
+                    "Best regards,\nPradeep Kumar A.\nB.Tech Artificial Intelligence & Data Science"
+                )
             return {
                 "subject": default_subject,
                 "body": body,

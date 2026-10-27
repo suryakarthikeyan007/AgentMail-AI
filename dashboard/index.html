@@ -23,8 +23,9 @@
       </div>
     </div>
     <div class="nav-status">
-      <div class="badge badge-outline"><span class="indicator live"></span> Ollama: Llama 3.1</div>
-      <div class="badge badge-outline"><span class="indicator live"></span> Embedding: nomic-embed-text</div>
+      <div class="badge badge-outline" id="badge-backend-status"><span class="indicator live" id="ind-backend"></span> <span id="text-backend-status">Backend: Checking...</span></div>
+      <div class="badge badge-outline" id="badge-ollama-status"><span class="indicator live" id="ind-ollama"></span> <span id="text-ollama-status">Ollama: Llama 3.1</span></div>
+      <div class="badge badge-outline" id="badge-embedding-status"><span class="indicator live" id="ind-embedding"></span> <span id="text-embedding-status">Embeddings: nomic-embed</span></div>
       <div class="badge badge-accent" id="test-mode-badge">TEST_MODE: ACTIVE</div>
       <button class="btn btn-secondary btn-sm" id="btn-refresh-data" title="Refresh Dashboard">🔄 Refresh</button>
     </div>
