@@ -281,10 +281,16 @@ def get_system_stats() -> Dict[str, Any]:
     cursor.execute("SELECT COUNT(*) FROM processed_emails")
     total_processed = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM processed_emails WHERE final_action = 'AUTO_REPLY'")
+    cursor.execute("SELECT COUNT(*) FROM processed_emails WHERE final_action = 'AUTO_REPLY' AND planner_decision = 'AUTO_REPLY'")
     auto_replies = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM processed_emails WHERE planner_decision = 'HUMAN_APPROVAL' OR final_action = 'HUMAN_APPROVAL'")
+    cursor.execute("""
+        SELECT COUNT(*) FROM processed_emails 
+        WHERE planner_decision = 'HUMAN_APPROVAL' 
+           OR final_action = 'HUMAN_APPROVAL' 
+           OR final_action = 'APPROVED_AND_SENT' 
+           OR final_action = 'REJECTED_STOP'
+    """)
     human_approvals = cursor.fetchone()[0]
 
     cursor.execute("SELECT COUNT(*) FROM processed_emails WHERE planner_decision = 'CLARIFICATION_REQUIRED' OR final_action = 'CLARIFICATION_REQUIRED'")

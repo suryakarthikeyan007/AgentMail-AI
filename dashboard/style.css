@@ -149,6 +149,18 @@ body.dark-theme {
   border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
+.badge-purple {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.badge-cyan {
+  background: rgba(6, 182, 212, 0.15);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.35);
+}
+
 .indicator {
   width: 7px;
   height: 7px;

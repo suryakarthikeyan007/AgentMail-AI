@@ -33,6 +33,18 @@ const PRESETS = {
     subject: 'Re: Technical Interview Invitation - AI Engineer Role',
     thread_id: 'thread_interview_901',
     body: 'Hi Pradeep,\n\nJust following up on my previous message regarding the interview. Did you receive our request?'
+  },
+  clarification: {
+    sender: 'organizer@ai-symposium2026.org',
+    subject: 'Keynote Speaker Invitation - Agentic AI Conference',
+    thread_id: 'thread_conf_771',
+    body: 'Hi Pradeep,\n\nWe would love to invite you to speak about your Agentic AI research at our upcoming symposium. Could we set up a quick briefing call sometime next week? Please let us know what works for you.\n\nBest regards,\nConference Committee'
+  },
+  tool: {
+    sender: 'system-bot@ats-portal.net',
+    subject: 'ATS Application Status Query: Reference #APP-9402',
+    thread_id: 'thread_tool_330',
+    body: 'Automated Status Query:\n\nPlease query the candidate status in the ATS database for candidate application reference ID #APP-9402 and return current interview stage.'
   }
 };
 
@@ -340,8 +352,23 @@ function updateStats(data) {
 
 function computeStatsFromLocal() {
   const total = auditRecords.length;
-  const auto = auditRecords.filter(r => r.final_action === 'AUTO_REPLY' || r.final_action === 'APPROVED_AND_SENT' || r.final_action === 'EDITED_AND_SENT' || r.final_action === 'SIMULATED_SEND').length;
-  const approvals = pendingApprovals.length;
+
+  // Purely autonomous replies without human intervention
+  const auto = auditRecords.filter(r =>
+    r.planner_decision === 'AUTO_REPLY' &&
+    (r.final_action === 'AUTO_REPLY' || r.final_action === 'SIMULATED_SEND' || r.final_action === 'SENT')
+  ).length;
+
+  // Total emails requiring or completing human approval gate
+  const approvals = auditRecords.filter(r =>
+    r.planner_decision === 'HUMAN_APPROVAL' ||
+    r.final_action === 'HUMAN_APPROVAL' ||
+    r.final_action === 'APPROVED_AND_SENT' ||
+    r.final_action === 'EDITED_AND_SENT' ||
+    r.final_action === 'REJECTED_STOP' ||
+    (r.final_action === 'SIMULATED_SEND' && r.planner_decision === 'HUMAN_APPROVAL')
+  ).length || pendingApprovals.length;
+
   const clarifications = auditRecords.filter(r => r.planner_decision === 'CLARIFICATION_REQUIRED' || r.final_action === 'CLARIFICATION_REQUIRED').length;
   const tools = auditRecords.filter(r => r.planner_decision === 'TOOL_REQUIRED' || r.final_action === 'TOOL_REQUIRED').length;
   const ignored = auditRecords.filter(r => r.final_action === 'IGNORE' || r.planner_decision === 'IGNORE').length;
@@ -460,6 +487,12 @@ function renderDecisionsTable(emails) {
     } else if (email.final_action === 'REJECTED_STOP') {
       actionBadgeClass = 'badge-danger';
       actionText = 'REJECTED (HALTED)';
+    } else if (email.final_action === 'CLARIFICATION_REQUIRED') {
+      actionBadgeClass = 'badge-purple';
+      actionText = 'CLARIFICATION';
+    } else if (email.final_action === 'TOOL_REQUIRED') {
+      actionBadgeClass = 'badge-cyan';
+      actionText = 'TOOL QUERY';
     } else if (email.final_action === 'IGNORE') {
       actionBadgeClass = 'badge-outline';
       actionText = 'IGNORED (SPAM)';
@@ -775,6 +808,99 @@ function simulateClientSidePipeline(payload, pipelineStartTime = performance.now
         { step: 'DISPATCH', status: 'COMPLETED', dispatch_mode: 'TEST_MODE_SIMULATION', delivery_status: 'SIMULATED_SUCCESS (NO_REAL_DISPATCH)', details: 'Email safely simulated.' }
       ]
     };
+  } else if (bodyLower.includes('briefing call') || bodyLower.includes('sometime next week') || subjectLower.includes('keynote') || subjectLower.includes('clarification') || bodyLower.includes('clarification')) {
+    result = {
+      message_id: demoId,
+      thread_id: threadId,
+      sender: payload.sender,
+      subject: payload.subject,
+      is_simulated: true,
+      classification: { category: 'Inquiry', intent: 'Speaking invitation & schedule coordination', priority: 'Medium', confidence: 0.94 },
+      rag_context: {
+        sources: ['knowledge_base/response_guidelines/email_guidelines.md'],
+        formatted_text: 'Policy: When an invitation lacks specific dates, duration, or session format (virtual/in-person), decide CLARIFICATION_REQUIRED to gather necessary parameters.'
+      },
+      planner_decision: {
+        decision: 'CLARIFICATION_REQUIRED',
+        priority: 'Medium',
+        risk_level: 'LOW',
+        approval_required: false,
+        approval_rule_applied: 'RULE_CLARIFICATION_POLICY',
+        reason: 'Ambiguous scheduling request; missing session format, exact date, and duration. Clarification required before committing.',
+        confidence: 0.95
+      },
+      quality_audit: {
+        approved: true,
+        risk_level: 'LOW',
+        approval_required: false,
+        approval_rule_applied: 'RULE_CLARIFICATION_POLICY',
+        issues: []
+      },
+      draft_response: {
+        subject: `Re: ${payload.subject}`,
+        body: `Dear Event Organizer,\n\nThank you for inviting me to speak at the symposium! I would be delighted to participate and share my work on Agentic AI.\n\nCould you please share a few additional details regarding the preferred date, session duration, and whether the talk will be virtual or in-person? This will help me prepare accordingly.\n\nBest regards,\nPradeep Kumar A.\nB.Tech Artificial Intelligence & Data Science\nAnna University`,
+        reasoning_summary: 'Polite clarification email seeking event details before confirming availability.'
+      },
+      final_action: 'CLARIFICATION_REQUIRED',
+      action_reason: 'Clarification Gate: Dispatched clarifying questions to collect missing event parameters.',
+      processing_time_ms: dynamicLatency,
+      pipeline_trace: [
+        { step: 'PREPROCESS', status: 'COMPLETED', details: 'Cleaned email text' },
+        { step: 'CLASSIFY', status: 'COMPLETED', category: 'Inquiry', priority: 'Medium', confidence: 0.94, details: 'Identified conference invitation with unspecified parameters' },
+        { step: 'RETRIEVE_RAG', status: 'COMPLETED', sources: ['email_guidelines.md'], details: 'Retrieved clarification policy guidelines' },
+        { step: 'RETRIEVE_MEMORY', status: 'COMPLETED', is_thread_existing: isThreadExisting, turn_history_count: priorTurns.length, details: memoryStepDetails },
+        { step: 'PLAN', status: 'COMPLETED', decision: 'CLARIFICATION_REQUIRED', priority: 'Medium', risk_level: 'LOW', approval_required: false, approval_rule_applied: 'RULE_CLARIFICATION_POLICY', reason: 'Missing event dates and duration.' },
+        { step: 'WRITE_DRAFT', status: 'COMPLETED', draft_subject: `Re: ${payload.subject}`, details: 'Generated safe clarification questionnaire draft.' },
+        { step: 'QUALITY_AUDIT', status: 'COMPLETED', risk_level: 'LOW', approval_required: false, approval_rule_applied: 'RULE_CLARIFICATION_POLICY', audit_approved: true, details: 'Verified no false commitments made.' },
+        { step: 'DISPATCH', status: 'COMPLETED', dispatch_mode: 'TEST_MODE_SIMULATION', delivery_status: 'SIMULATED_SUCCESS (NO_REAL_DISPATCH)', details: 'Clarification questions simulated to sender.' }
+      ]
+    };
+  } else if (bodyLower.includes('ats') || bodyLower.includes('app-') || bodyLower.includes('database') || subjectLower.includes('status query') || bodyLower.includes('candidate status')) {
+    result = {
+      message_id: demoId,
+      thread_id: threadId,
+      sender: payload.sender,
+      subject: payload.subject,
+      is_simulated: true,
+      classification: { category: 'System/Tool Query', intent: 'ATS candidate status inquiry', priority: 'Medium', confidence: 0.98 },
+      rag_context: {
+        sources: ['knowledge_base/technical_skills.md'],
+        formatted_text: 'ATS Integration Tool: Database query tool enabled for candidate application tracking.'
+      },
+      planner_decision: {
+        decision: 'TOOL_REQUIRED',
+        priority: 'Medium',
+        risk_level: 'LOW',
+        approval_required: false,
+        approval_rule_applied: 'RULE_TOOL_INVOCATION_GATE',
+        reason: 'Automated status query requires querying external ATS SQLite database for Reference ID #APP-9402.',
+        confidence: 0.98
+      },
+      quality_audit: {
+        approved: true,
+        risk_level: 'LOW',
+        approval_required: false,
+        approval_rule_applied: 'RULE_TOOL_INVOCATION_GATE',
+        issues: []
+      },
+      draft_response: {
+        subject: `Re: ${payload.subject}`,
+        body: `Automated System Status:\n\nATS Record Query for Application Reference #APP-9402:\n• Candidate: Pradeep Kumar A.\n• Applied Role: AI Engineer\n• Status: Technical Round Scheduled\n• System Verification: OK\n\nGenerated automatically via ATS Tool execution.`,
+        reasoning_summary: 'Queried database and compiled automated structured status summary.'
+      },
+      final_action: 'TOOL_REQUIRED',
+      action_reason: 'Tool Gate: External ATS Database query tool invoked and executed successfully.',
+      processing_time_ms: dynamicLatency,
+      pipeline_trace: [
+        { step: 'PREPROCESS', status: 'COMPLETED', details: 'Parsed query parameters (#APP-9402)' },
+        { step: 'CLASSIFY', status: 'COMPLETED', category: 'System/Tool Query', priority: 'Medium', confidence: 0.98, details: 'Identified tool query requirement' },
+        { step: 'RETRIEVE_MEMORY', status: 'COMPLETED', is_thread_existing: isThreadExisting, turn_history_count: priorTurns.length, details: memoryStepDetails },
+        { step: 'PLAN', status: 'COMPLETED', decision: 'TOOL_REQUIRED', priority: 'Medium', risk_level: 'LOW', approval_required: false, approval_rule_applied: 'RULE_TOOL_INVOCATION_GATE', reason: 'ATS Database query tool execution requested.' },
+        { step: 'TOOL_EXECUTION', status: 'COMPLETED', tool_name: 'ats_database_query', query_parameter: '#APP-9402', details: 'Executed ATS database lookup: Found Application #APP-9402 (Stage: Technical Round Scheduled).' },
+        { step: 'WRITE_DRAFT', status: 'COMPLETED', draft_subject: `Re: ${payload.subject}`, details: 'Compiled tool execution results into structured response.' },
+        { step: 'DISPATCH', status: 'COMPLETED', dispatch_mode: 'TEST_MODE_SIMULATION', delivery_status: 'SIMULATED_SUCCESS (NO_REAL_DISPATCH)', details: 'Tool-generated response simulated to requester.' }
+      ]
+    };
   } else {
     // General / Resume inquiry
     result = {
@@ -818,7 +944,9 @@ function simulateClientSidePipeline(payload, pipelineStartTime = performance.now
     final_action: result.final_action,
     processing_time_ms: dynamicLatency,
     is_simulated: true,
-    delivery_status: result.final_action === 'AUTO_REPLY' ? 'SIMULATED_SUCCESS (NO_REAL_DISPATCH)' : (result.final_action === 'IGNORE' ? 'NOT_SENT' : 'PENDING_APPROVAL')
+    delivery_status: (result.final_action === 'AUTO_REPLY' || result.final_action === 'CLARIFICATION_REQUIRED' || result.final_action === 'TOOL_REQUIRED')
+      ? 'SIMULATED_SUCCESS (NO_REAL_DISPATCH)'
+      : (result.final_action === 'IGNORE' ? 'NOT_SENT' : 'PENDING_APPROVAL')
   });
 
   if (result.final_action === 'HUMAN_APPROVAL') {
@@ -885,7 +1013,10 @@ function displayTrace(res, isSimulated = false) {
   // Summary box
   const summaryBox = document.getElementById('trace-summary-box');
   const actionColor = (res.final_action === 'AUTO_REPLY' || res.final_action === 'APPROVED_AND_SENT') ? 'var(--color-green)'
-    : (res.final_action === 'HUMAN_APPROVAL' ? 'var(--color-amber)' : 'var(--color-blue)');
+    : (res.final_action === 'HUMAN_APPROVAL' ? 'var(--color-amber)'
+    : (res.final_action === 'CLARIFICATION_REQUIRED' ? '#c084fc'
+    : (res.final_action === 'TOOL_REQUIRED' ? '#22d3ee'
+    : 'var(--color-blue)')));
 
   summaryBox.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
@@ -927,6 +1058,8 @@ function displayTrace(res, isSimulated = false) {
       extra = `Risk Level: <strong>${escapeHtml(t.risk_level || 'LOW')}</strong> &bull; Approved: <strong>${t.audit_approved ? 'YES' : 'NO'}</strong> &bull; ${escapeHtml(issuesText)}`;
     } else if (stepName === 'QUEUE_HUMAN_APPROVAL') {
       extra = `Held for supervisor review. Reason: <strong>${escapeHtml(t.reason || t.details || 'Zero-Hallucination Gate enforced.')}</strong>`;
+    } else if (stepName === 'TOOL_EXECUTION') {
+      extra = `Tool: <strong>${escapeHtml(t.tool_name || 'external_tool')}</strong> &bull; Query: <code>${escapeHtml(t.query_parameter || '')}</code> &bull; ${escapeHtml(t.details || 'Tool executed successfully.')}`;
     } else if (stepName === 'DISPATCH') {
       extra = `Mode: <strong>${escapeHtml(t.dispatch_mode || 'SIMULATED')}</strong> &bull; Status: <strong>${escapeHtml(t.delivery_status || 'SIMULATED_SUCCESS')}</strong> &bull; ${escapeHtml(t.details || '')}`;
     } else {
