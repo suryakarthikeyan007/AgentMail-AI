@@ -158,6 +158,10 @@ def reject_draft_endpoint(payload: ApprovalActionSchema):
         conn.close()
         raise HTTPException(status_code=400, detail="Cannot reject an email draft that has already been dispatched.")
 
+    if item_dict.get("status") == "REJECTED":
+        conn.close()
+        raise HTTPException(status_code=400, detail="This email draft has already been rejected.")
+
     update_approval_status(payload.message_id, "REJECTED")
 
     # Update processed_emails state
@@ -201,6 +205,10 @@ def edit_response_endpoint(payload: EditResponseSchema):
     if item_dict.get("status") in ["APPROVED", "EDITED_AND_APPROVED"]:
         conn.close()
         raise HTTPException(status_code=400, detail="This draft has already been dispatched. Further edits blocked.")
+
+    if item_dict.get("status") == "REJECTED":
+        conn.close()
+        raise HTTPException(status_code=400, detail="Cannot edit or dispatch a previously rejected email draft. Rejection is final.")
 
     # Re-audit edited body via Quality Risk Checker
     edited_draft = {

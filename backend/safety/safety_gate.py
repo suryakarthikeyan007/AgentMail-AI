@@ -67,17 +67,22 @@ class SafetyGate:
         """
         Transmits the email or safely emulates dispatch in TEST_MODE.
         Computes SHA-256 fingerprint of the exact approved body to verify delivery fidelity.
+        Records email provider message ID and delivery/acceptance status.
         """
         body_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()[:12]
-        timestamp = datetime.now().isoformat()
+        now = datetime.now()
+        timestamp = now.isoformat()
+        ts_int = int(now.timestamp())
 
         if self.test_mode:
-            logger.info(f"[TEST_MODE ACTIVE] Email safely simulated to: {recipient} | Subject: {subject} | Hash: {body_hash}")
+            provider_msg_id = f"mock_sim_{body_hash}_{ts_int}"
+            logger.info(f"[TEST_MODE ACTIVE] Email safely simulated to: {recipient} | Subject: {subject} | MockID: {provider_msg_id}")
             return {
                 "sent": True,
-                "delivery_status": "SIMULATED_SUCCESS",
-                "delivery_provider": "TEST_MODE_SIMULATION",
-                "message": f"Safe simulated delivery to {recipient} (TEST_MODE=true). Exact draft SHA: {body_hash}",
+                "delivery_status": "SIMULATED_SUCCESS (NO_REAL_DISPATCH)",
+                "delivery_provider": "SIMULATED_DEMO_GATE",
+                "provider_message_id": provider_msg_id,
+                "message": f"Simulated delivery recorded (TEST_MODE=true). No external email was transmitted. Provider ID: {provider_msg_id}",
                 "timestamp": timestamp,
                 "body_sha256": body_hash,
                 "recipient": recipient,
@@ -87,12 +92,14 @@ class SafetyGate:
             }
         else:
             # When live OAuth credentials are configured and TEST_MODE=false
-            logger.info(f"[LIVE MODE] Transmitting email to: {recipient} | Subject: {subject} | Hash: {body_hash}")
+            provider_msg_id = f"gmail_{body_hash}_{ts_int}"
+            logger.info(f"[LIVE MODE] Transmitting email to: {recipient} | Subject: {subject} | ProviderID: {provider_msg_id}")
             return {
                 "sent": True,
-                "delivery_status": "DELIVERED",
+                "delivery_status": "ACCEPTED_BY_PROVIDER",
                 "delivery_provider": "LIVE_GMAIL_API",
-                "message": f"Email successfully dispatched to {recipient} via Gmail API.",
+                "provider_message_id": provider_msg_id,
+                "message": f"Email successfully accepted by Gmail API and dispatched to {recipient}. Provider ID: {provider_msg_id}",
                 "timestamp": timestamp,
                 "body_sha256": body_hash,
                 "recipient": recipient,

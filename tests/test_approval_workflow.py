@@ -97,7 +97,8 @@ def test_approve_pending_email_success():
     assert audit_entry is not None
     assert audit_entry["action"] == "APPROVED_AND_SENT"
     assert audit_entry["approval_status"] == "APPROVED"
-    assert audit_entry["send_status"] in ["SENT", "SIMULATED_SUCCESS"]
+    assert "SIMULATED" in audit_entry["send_status"] or audit_entry["send_status"] == "SENT"
+    assert "provider_message_id" in data["dispatch"]
 
 
 def test_duplicate_send_prevention():
@@ -150,6 +151,34 @@ def test_cannot_approve_rejected_email():
     assert "Cannot approve a previously rejected" in res.json()["detail"]
 
 
+def test_cannot_edit_rejected_email():
+    """Item 4: Cannot edit an email draft that was already rejected."""
+    msg_id = f"test_rejedit_{uuid.uuid4().hex[:8]}"
+    create_mock_pending_email(msg_id)
+
+    client.post("/api/reject", json={"message_id": msg_id, "comment": "Rejecting"})
+    res = client.post("/api/edit-response", json={
+        "message_id": msg_id,
+        "edited_body": "Attempted edit on rejected email",
+        "comment": "Edit after rejection"
+    })
+    assert res.status_code == 400
+    assert "Cannot edit or dispatch a previously rejected" in res.json()["detail"]
+
+
+def test_cannot_re_reject_rejected_email():
+    """Item 4: Repeated rejection clicks return 400 bad request."""
+    msg_id = f"test_duprej_{uuid.uuid4().hex[:8]}"
+    create_mock_pending_email(msg_id)
+
+    res1 = client.post("/api/reject", json={"message_id": msg_id, "comment": "Rejecting"})
+    assert res1.status_code == 200
+
+    res2 = client.post("/api/reject", json={"message_id": msg_id, "comment": "Rejecting again"})
+    assert res2.status_code == 400
+    assert "already been rejected" in res2.json()["detail"]
+
+
 def test_cannot_reject_dispatched_email():
     """Cannot reject an email that was already sent."""
     msg_id = f"test_rejdispatched_{uuid.uuid4().hex[:8]}"
@@ -179,6 +208,7 @@ def test_edit_response_workflow_and_duplicate_prevention():
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "edited_and_sent"
+    assert "provider_message_id" in data["dispatch"]
 
     # Verify DB update
     conn = get_db_connection()
