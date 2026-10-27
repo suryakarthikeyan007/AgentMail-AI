@@ -1,11 +1,14 @@
 # AgentMail AI: An Agentic AI-Based Intelligent Email Management System
 
+[![Live Demo](https://img.shields.io/badge/Live%20Dashboard-GitHub%20Pages-brightgreen.svg?style=for-the-badge&logo=github)](https://suryakarthikeyan007.github.io/AgentMail-AI/)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
 [![Ollama](https://img.shields.io/badge/Ollama-0.32.8-black.svg)](https://ollama.com/)
 [![Model: Llama 3.1](https://img.shields.io/badge/LLM-Llama_3.1_(8B)-green.svg)](https://ollama.com/library/llama3.1)
 [![Embeddings: nomic-embed-text](https://img.shields.io/badge/Embeddings-nomic--embed--text-purple.svg)](https://ollama.com/library/nomic-embed-text)
 [![n8n 2.8.4](https://img.shields.io/badge/n8n-2.8.4-red.svg)](https://n8n.io/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Production-teal.svg)](https://fastapi.tiangolo.com/)
+
+> 🌐 **Live Interactive Web Demo**: **[https://suryakarthikeyan007.github.io/AgentMail-AI/](https://suryakarthikeyan007.github.io/AgentMail-AI/)**
 
 A complete, production-grade final-year B.Tech Capstone Project in **Artificial Intelligence & Data Science**.
 
@@ -252,9 +255,13 @@ AgentMail-AI/
 │       └── GMAIL_OAUTH_SETUP.md # Google Cloud OAuth setup guide
 │
 ├── tests/                       # Test Suite
-│   ├── test_preprocessor.py     # Preprocessor unit tests
-│   ├── test_safety_checker.py   # Safety & quality critic unit tests
-│   └── test_10_cases.py         # 10 formal academic test cases
+│   ├── test_calendar_verification.py # Grounding & calendar gate tests
+│   ├── test_approval_workflow.py     # Approval queue, SHA-256 & health endpoint tests
+│   ├── test_memory_and_rag_proof.py  # Thread memory continuity & RAG proof tests
+│   ├── test_planner.py               # Deterministic planner gate unit tests
+│   ├── test_preprocessor.py          # Preprocessor unit tests
+│   ├── test_safety_checker.py        # Safety & quality critic unit tests
+│   └── test_10_cases.py              # 10 formal academic test cases
 │
 └── docs/                        # Complete Final-Year Academic Deliverables
     ├── 01_PROJECT_REPORT.md     # 29-section complete capstone report
@@ -266,13 +273,15 @@ AgentMail-AI/
 
 ---
 
-## 🛡️ Safety & Zero-Hallucination Guarantee
+## 🛡️ Safety & Zero-Hallucination Guarantees (6 Core Safeguards)
 
 AgentMail AI is engineered with deterministic safety gates:
-- **No False Commitments**: If an incoming email asks *"Can we meet tomorrow at 3 PM?"*, the system checks tool availability. Because verified calendar tools are offline, the Planner strictly outputs `HUMAN_APPROVAL` or `CLARIFICATION_REQUIRED`. It **never** generates *"Sure, tomorrow at 3 PM works."*
-- **Salary Protection**: Mentions of LPA, CTC, or salary negotiation are escalated to the human supervisor.
-- **Untrusted Input Filtering**: Mitigates prompt injection by sanitizing commands like *"Ignore all previous instructions"*.
-- **Safe Testing Gate**: `TEST_MODE=true` simulates transmission without live SMTP/OAuth execution.
+1. **Calendar Verification Grounding**: When calendar tools are offline, the system strictly outputs `UNVERIFIED_CALENDAR_OFFLINE`. The Writer Agent is prohibited from claiming *"I have checked my schedule"*; it grounds replies with *"I will need to confirm my availability before committing to that time"* and requests 2-3 alternatives.
+2. **Transparent Structured Traces**: Every pipeline step is structured into human-readable cards with an expandable `<details>` technical debug panel for examiners.
+3. **Strict State & Timestamp Consistency**: Timestamps preserve complete formats (`8:15:38 PM`) with singular/plural-aware counters (`1 Record` vs `2 Records`).
+4. **Explicit Multi-Dimensional Policy**: Separates `priority` (urgency), `risk_level` (severity), and `approval_required` (boolean enforced by backend rules).
+5. **End-to-End Approval Verification**: Approval actions enforce duplicate-send protection, quality re-verification on edits, and draft SHA-256 fingerprint tracking (`delivery_status: "SIMULATED_SUCCESS"` / `"DELIVERED"`).
+6. **Verified Service Health**: Real-time `/api/health` monitoring SQLite and Ollama, with clear client-side simulation labeling on static GitHub Pages hosting.
 
 ---
 
